@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
@@ -18,39 +18,35 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        cmdline-tools-version: 11076708
-        accept-android-sdk-licenses: true
 
-    - name: Install build tools
+    - name: Accept SDK Licenses & Install Platform
       run: |
-        sdkmanager "platforms;android-34" "build-tools;34.0.0" --sdk_root=$ANDROID_SDK_ROOT
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
         echo "ANDROID_HOME=$ANDROID_HOME"
-        echo "SDK platforms installed"
+        ls $ANDROID_HOME/platforms/
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
-    - name: Build Debug APK
+    - name: Show project structure
       run: |
-        ./gradlew assembleDebug --no-daemon --stacktrace
-      env:
-        ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        cat app/build.gradle
+        cat build.gradle
+        cat gradle/wrapper/gradle-wrapper.properties
 
-    - name: Verify APK exists
-      run: |
-        echo "=== APK OUTPUT ==="
-        find . -name "*.apk" -type f
-        ls -lh app/build/outputs/apk/debug/ 2>/dev/null || echo "Checking other paths..."
+    - name: Build APK
+      run: ./gradlew assembleDebug --no-daemon --info 2>&1
 
-    - name: Upload APK Artifact
+    - name: List APK
+      run: find . -name "*.apk"
+
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: WalletPro-APK
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 90
-        if-no-files-found: error
