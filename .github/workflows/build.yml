@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
     - name: Checkout
@@ -18,26 +20,45 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
     - name: Accept licenses
-      run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
+      run: |
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        sdkmanager "platforms;android-34" "build-tools;34.0.0" --sdk_root=$ANDROID_SDK_ROOT
 
-    - name: Install Android platform
-      run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+    - name: Set SDK path
+      run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
+    - name: Run Build (capture output)
+      run: |
+        set +e
+        ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build_output.txt
+        EXIT=${PIPESTATUS[0]}
+        echo "BUILD_EXIT=$EXIT" >> $GITHUB_ENV
+        if [ $EXIT -ne 0 ]; then
+          echo "==== LAST 100 LINES OF BUILD OUTPUT ===="
+          tail -100 build_output.txt
+          exit $EXIT
+        fi
 
     - name: Upload APK
+      if: env.BUILD_EXIT == '0' || success()
       uses: actions/upload-artifact@v4
       with:
         name: WalletPro-APK
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 90
+
+    - name: Upload Build Log (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build_output.txt
+        retention-days: 7
