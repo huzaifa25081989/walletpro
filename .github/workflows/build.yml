@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
     - name: Checkout
@@ -24,41 +22,34 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Accept licenses
+    - name: Setup SDK and build environment
       run: |
         yes | sdkmanager --licenses > /dev/null 2>&1 || true
-        sdkmanager "platforms;android-34" "build-tools;34.0.0" --sdk_root=$ANDROID_SDK_ROOT
-
-    - name: Set SDK path
-      run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+        sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        echo "sdk.dir=$ANDROID_HOME" > local.properties
+        echo "ANDROID_HOME is: $ANDROID_HOME"
+        ls $ANDROID_HOME/platforms/ || echo "No platforms"
+        cat app/build.gradle
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
-    - name: Run Build (capture output)
+    - name: Validate project
       run: |
-        set +e
-        ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build_output.txt
-        EXIT=${PIPESTATUS[0]}
-        echo "BUILD_EXIT=$EXIT" >> $GITHUB_ENV
-        if [ $EXIT -ne 0 ]; then
-          echo "==== LAST 100 LINES OF BUILD OUTPUT ===="
-          tail -100 build_output.txt
-          exit $EXIT
-        fi
+        echo "=== Project files ==="
+        find . -name "*.java" -o -name "*.xml" -o -name "*.gradle" | grep -v ".git" | sort
+        echo ""
+        echo "=== AndroidManifest ==="
+        cat app/src/main/AndroidManifest.xml
+
+    - name: Build APK
+      run: |
+        ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1
 
     - name: Upload APK
-      if: env.BUILD_EXIT == '0' || success()
       uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: WalletPro-APK
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 90
-
-    - name: Upload Build Log (on failure)
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build_output.txt
-        retention-days: 7
