@@ -22,30 +22,31 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Setup environment
+    - name: Install platform & tools
       run: |
         yes | sdkmanager --licenses > /dev/null 2>&1 || true
         sdkmanager "platforms;android-34" "build-tools;34.0.0"
         echo "sdk.dir=$ANDROID_HOME" > local.properties
+        echo "ANDROID_HOME: $ANDROID_HOME"
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
-    - name: Build APK and write summary
+    - name: Gradle dependencies check
+      run: ./gradlew dependencies --no-daemon 2>&1 | tail -30
+      continue-on-error: true
+
+    - name: Build APK
       run: |
-        set +e
-        OUTPUT=$(./gradlew assembleDebug --no-daemon --stacktrace 2>&1)
-        EXIT=$?
-        
-        # Write full output to step summary (accessible via API)
-        echo "## Build Output" >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
-        echo "$OUTPUT" | tail -120 >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
-        
-        # Also print to console
-        echo "$OUTPUT"
-        exit $EXIT
+        ./gradlew assembleDebug \
+          --no-daemon \
+          --stacktrace \
+          --warning-mode all \
+          -Dorg.gradle.logging.level=info \
+          2>&1
+
+    - name: Find APK
+      run: find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
