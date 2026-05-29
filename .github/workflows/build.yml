@@ -18,31 +18,22 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: gradle
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Accept SDK Licenses & Install Platform
-      run: |
-        yes | sdkmanager --licenses > /dev/null 2>&1 || true
-        sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
-        echo "ANDROID_HOME=$ANDROID_HOME"
-        ls $ANDROID_HOME/platforms/
+    - name: Accept licenses
+      run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+    - name: Install Android platform
+      run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
-    - name: Show project structure
-      run: |
-        cat app/build.gradle
-        cat build.gradle
-        cat gradle/wrapper/gradle-wrapper.properties
-
-    - name: Build APK
-      run: ./gradlew assembleDebug --no-daemon --info 2>&1
-
-    - name: List APK
-      run: find . -name "*.apk"
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
